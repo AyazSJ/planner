@@ -60,6 +60,18 @@ main[hidden]{display:none}
 .dot{width:10px;height:10px;border-radius:3px;flex:none}
 .lab:hover{background:var(--panel)}
 .row.done .lab .t{text-decoration:line-through;color:var(--sub)}
+.row.sub{height:36px}
+.row.sub .lab{padding-left:44px;font-size:14px;font-weight:500}
+.row.sub .bar{top:7px;height:22px;font-size:12px;font-weight:600;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.row.sub.ghost .lab{font-size:13px}
+.car{border:0;background:transparent;min-height:30px;width:22px;padding:0;margin-left:-6px;font-size:12px;color:var(--sub);transition:transform .15s;flex:none}
+.car:hover{color:var(--ink)}.car[aria-expanded=true]{transform:rotate(90deg)}
+.lab .sc{margin-left:auto;font-size:12px;color:var(--sub);font-weight:600;background:var(--panel);border-radius:99px;padding:0 7px}
+.steps{grid-column:2/4;display:grid;gap:2px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.stp{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;min-height:30px}
+.stp input{width:18px!important;height:18px!important;margin:0!important}
+.stp span{flex:1;overflow-wrap:anywhere}.stp em{font-style:normal;font-size:12px;color:var(--sub);white-space:nowrap}
+.stp.done span{text-decoration:line-through;color:var(--sub)}
 .track{position:relative;flex:none;cursor:crosshair;touch-action:pan-x pan-y}
 .row.ghost .lab{color:var(--sub);font-weight:500}
 .bar{position:absolute;top:9px;height:28px;border-radius:5px;display:flex;align-items:center;padding:0 12px;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;cursor:grab;touch-action:none;user-select:none;box-shadow:0 1px 0 rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.28);background-image:linear-gradient(180deg,rgba(255,255,255,.16),rgba(0,0,0,.04))}
@@ -245,7 +257,7 @@ form .chk{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15p
 <div class="ov" id="ov">
   <form id="f" autocomplete="off">
     <h4 id="ft">New task</h4>
-    <label>Assignment name<input type="text" id="fn" required placeholder="e.g. Reading response 4"></label>
+    <label id="fnl">Assignment name<input type="text" id="fn" required placeholder="e.g. Reading response 4"></label>
     <label>Class or notes<input type="text" id="fc" placeholder="e.g. ID History"></label>
     <div class="two">
       <label>Start<input type="date" id="fs" required></label>
@@ -255,7 +267,7 @@ form .chk{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15p
     <label class="chk"><input type="checkbox" id="fd"> Finished</label>
     <div class="acts">
       <button type="button" class="del" id="fdel">Delete</button>
-      <div><button type="button" id="fx">Cancel</button><button type="submit" class="primary">Save</button></div>
+      <div><button type="button" id="fstep">+ Add step</button><button type="button" id="fx">Cancel</button><button type="submit" class="primary">Save</button></div>
     </div>
   </form>
 </div>
@@ -304,7 +316,12 @@ const samples=()=>[
   ['Loud Lychee exploded view','Drawing I',0,6,'#ffb400'],
   ['Silicone hemisphere repair','Studio',2,5,'#2bb3a3'],
   ['Color grid repeats','2D',5,11,'#a66bff']
-].map(([name,course,a,b,color])=>({id:uid(),name,course,start:S(TODAY+a),end:S(TODAY+b),color,done:false}));
+].map(([name,course,a,b,color])=>({id:uid(),name,course,start:S(TODAY+a),end:S(TODAY+b),color,done:false,steps:[]}));
+const withSteps=l=>{const t=l[1];t.open=true;t.steps=[['Market research',-1,0],['Line art',1,2],['Build slides',3,4]].map(([name,a,b])=>({id:uid(),name,start:S(TODAY+a),end:S(TODAY+b),done:a<0&&false}));return l};
+
+const stepsOf=t=>t.steps||(t.steps=[]);
+const item=(pid,sid)=>{const t=tasks.find(x=>x.id===pid);return sid?t&&stepsOf(t).find(x=>x.id===sid):t};
+function cover(t){for(const x of stepsOf(t)){if(x.start<t.start)t.start=x.start;if(x.end>t.end)t.end=x.end}}
 
 /* ---------- saving ---------- */
 const status=t=>$('#status').textContent=t;
@@ -345,17 +362,25 @@ function render(){
     days+=`<div class="day${n===TODAY?' today':''}${showMo?' first':''}" style="width:${DW}px">${showMo?`<span class="mo">${MON[d.getUTCMonth()]} ${d.getUTCFullYear()!==now0.getFullYear()?d.getUTCFullYear():''}</span>`:''}<b>${md}</b><span>${DW>=40?WD[wd]:WD[wd][0]}</span></div>`;
     cols+=`<div class="col${wd===0||wd===6?' we':''}${n===TODAY?' today':''}" style="width:${DW}px"></div>`;
   }
+  const bar=(o,t,sid)=>{const a=N(o.start)-r0,b=N(o.end)-r0+1,c=sid?`color-mix(in srgb,${t.color} 72%,var(--bg))`:t.color;
+    const st=stepsOf(t),lbl=esc(o.name)+(!sid&&st.length?` · ${st.filter(x=>x.done).length}/${st.length}`:'');
+    return `<div class="bar${sid?' step':''}${o.done?' done':''}" tabindex="0" data-id="${t.id}"${sid?` data-s="${sid}"`:''} style="left:${a*DW}px;width:${(b-a)*DW}px;background-color:${c};color:${ink(t.color)}"><span class="h l"></span>${lbl}<span class="h r"></span></div>`};
+  const tr=(p,inner)=>`<div class="track"${p?` data-p="${p}"`:''} style="width:${W}px">${inner||''}</div>`;
   const rows=tasks.map(t=>{
-    const a=N(t.start)-r0,b=N(t.end)-r0+1;
-    return `<div class="row${t.done?' done':''}" data-id="${t.id}"><div class="lab" tabindex="0" data-edit="${t.id}"><span class="dot" style="background:${t.color}"></span><span class="t">${esc(t.name)}</span></div><div class="track" style="width:${W}px"><div class="bar${t.done?' done':''}" tabindex="0" data-id="${t.id}" style="left:${a*DW}px;width:${(b-a)*DW}px;background-color:${t.color};color:${ink(t.color)}"><span class="h l"></span>${esc(t.name)}<span class="h r"></span></div></div></div>`;
+    const st=stepsOf(t).sort((x,y)=>x.start.localeCompare(y.start)||x.end.localeCompare(y.end));
+    let h=`<div class="row${t.done?' done':''}" data-id="${t.id}"><div class="lab" tabindex="0" data-edit="${t.id}"><button class="car" data-tog="${t.id}" aria-expanded="${!!t.open}" aria-label="${t.open?'Hide':'Show'} steps for ${esc(t.name)}">▸</button><span class="dot" style="background:${t.color}"></span><span class="t">${esc(t.name)}</span>${st.length?`<span class="sc">${st.length}</span>`:''}</div>${tr('',bar(t,t))}</div>`;
+    if(t.open){
+      h+=st.map(x=>`<div class="row sub${x.done?' done':''}"><div class="lab" tabindex="0" data-edit="${t.id}" data-s="${x.id}"><span class="t">${esc(x.name)}</span></div>${tr(t.id,bar(x,t,x.id))}</div>`).join('');
+      h+=`<div class="row sub ghost"><div class="lab" tabindex="0" data-newstep="${t.id}">+ Add step</div>${tr(t.id)}</div>`;
+    }
+    return h;
   }).join('');
   $('#g').style.width=`calc(var(--lab) + ${W}px)`;
-  $('#g').innerHTML=`<div class="ghead"><div class="corner">Assignment</div><div class="days">${days}</div></div><div class="gbody"><div class="cols">${cols}</div>${rows}<div class="row ghost"><div class="lab" tabindex="0" data-new="1">+ New task</div><div class="track" style="width:${W}px"></div></div><div class="row ghost"><div class="lab"></div><div class="track" style="width:${W}px"></div></div></div>`;
+  $('#g').innerHTML=`<div class="ghead"><div class="corner">Assignment</div><div class="days">${days}</div></div><div class="gbody"><div class="cols">${cols}</div>${rows}<div class="row ghost"><div class="lab" tabindex="0" data-new="1">+ New task</div>${tr()}</div><div class="row ghost"><div class="lab"></div>${tr()}</div></div>`;
   document.querySelectorAll('#zoom button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.z===DW));
   side();
 }
 const wrap=$('#wrap');
-const labW=()=>$('.corner').offsetWidth;
 const leftDay=()=>r0+wrap.scrollLeft/DW;
 const goDay=(n,smooth)=>wrap.scrollTo({left:(n-r0)*DW,behavior:smooth?'smooth':'auto'});
 /* grow the timeline when you scroll near either end */
@@ -375,14 +400,16 @@ wrap.addEventListener('wheel',e=>{
 },{passive:false});
 
 /* ---------- today rail ---------- */
+const covers=o=>N(o.start)<=TODAY&&N(o.end)>=TODAY;
+const dueTxt=e=>{const left=e-TODAY;return left<0?`${-left}d late`:left===0?'Due today':left===1?'Due tomorrow':`Due ${fmt(e).split(' ')[0]}${left>6?' '+fmt(e).slice(4):''}`};
 function side(){
-  const now=tasks.filter(t=>N(t.start)<=TODAY&&N(t.end)>=TODAY).sort((a,b)=>a.done-b.done||a.end.localeCompare(b.end));
+  const now=tasks.filter(covers).sort((a,b)=>a.done-b.done||a.end.localeCompare(b.end));
   const late=tasks.filter(t=>!t.done&&N(t.end)<TODAY);
   const soon=tasks.filter(t=>N(t.start)>TODAY&&N(t.start)<=TODAY+7).sort((a,b)=>a.start.localeCompare(b.start));
   const card=t=>{
     const s=N(t.start),e=N(t.end),left=e-TODAY,len=e-s+1,pos=TODAY-s+1;
-    const due=left<0?`${-left}d late`:left===0?'Due today':left===1?'Due tomorrow':`Due ${fmt(e).split(' ')[0]}${left>6?' '+fmt(e).slice(4):''}`;
-    return `<div class="card${t.done?' done':''}" style="border-left-color:${t.color}"><input type="checkbox" data-tick="${t.id}" ${t.done?'checked':''} aria-label="Mark ${esc(t.name)} finished"><div class="n" data-edit="${t.id}">${esc(t.name)}</div><span class="due${left<=1&&!t.done?' hot':''}">${due}</span><div class="m">${t.course?esc(t.course)+' · ':''}${left<0?'Was due '+fmt(e):`Day ${Math.min(pos,len)} of ${len}`}</div><div class="meter"><i style="width:${Math.min(100,Math.max(0,pos/len*100))}%;background:${t.color}"></i></div></div>`;
+    const st=stepsOf(t).filter(x=>covers(x)||(!x.done&&N(x.end)<TODAY));
+    return `<div class="card${t.done?' done':''}" style="border-left-color:${t.color}"><input type="checkbox" data-tick="${t.id}" ${t.done?'checked':''} aria-label="Mark ${esc(t.name)} finished"><div class="n" data-edit="${t.id}">${esc(t.name)}</div><span class="due${left<=1&&!t.done?' hot':''}">${dueTxt(e)}</span><div class="m">${t.course?esc(t.course)+' · ':''}${left<0?'Was due '+fmt(e):`Day ${Math.min(pos,len)} of ${len}`}</div><div class="meter"><i style="width:${Math.min(100,Math.max(0,pos/len*100))}%;background:${t.color}"></i></div>${st.length?`<div class="steps">${st.map(x=>`<label class="stp${x.done?' done':''}"><input type="checkbox" data-stick="${t.id}:${x.id}" ${x.done?'checked':''}><span>${esc(x.name)}</span><em>${dueTxt(N(x.end))}</em></label>`).join('')}</div>`:''}</div>`;
   };
   const open=now.filter(t=>!t.done).length;
   $('#side').innerHTML=`<h2>Today</h2><p class="date">${fmt(TODAY)} · ${open?open+' to work on':'nothing open'}</p>
@@ -392,38 +419,52 @@ function side(){
   ${soon.length?soon.map(t=>`<div class="soon" data-edit="${t.id}"><span class="dot" style="background:${t.color}"></span><span class="t">${esc(t.name)}</span><span class="w">${fmt(N(t.start))}</span></div>`).join(''):'<p class="date">Nothing new starts in the next 7 days.</p>'}`;
 }
 
-/* ---------- task dialog ---------- */
+/* ---------- task / step dialog ---------- */
 let editing=null,color=COLORS[0];
 function swatches(){
   $('#sw').innerHTML=COLORS.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-label="Color ${c}" aria-pressed="${c===color}"></button>`).join('')+`<input type="color" id="fcol" value="${color}" aria-label="Custom color" title="Pick any color">`;
 }
-function openForm(t,start,end){
-  editing=t||null;
-  $('#ft').textContent=t?'Edit task':'New task';
-  $('#fn').value=t?t.name:'';$('#fc').value=t?t.course||'':'';
-  $('#fs').value=t?t.start:S(start??TODAY);$('#fe').value=t?t.end:S(end??(start??TODAY)+2);
-  $('#fd').checked=!!(t&&t.done);
-  color=t?t.color:COLORS[tasks.length%COLORS.length];swatches();
-  $('#fdel').hidden=!t;$('#fdel').classList.remove('sure');$('#fdel').textContent='Delete';
+/* o = the task or step being edited (null for new); pid = parent id when it's a step */
+function openForm(o,start,end,pid){
+  const par=pid?item(pid):null;
+  editing={o:o||null,pid:pid||null};
+  $('#ft').textContent=pid?(o?'Edit step':'New step')+' · '+par.name:o?'Edit task':'New task';
+  $('#fnl').firstChild.textContent=pid?'Step name':'Assignment name';
+  $('#fn').placeholder=pid?'e.g. Rough sketches':'e.g. Reading response 4';
+  $('#fn').value=o?o.name:'';$('#fc').value=o&&!pid?o.course||'':'';
+  $('#fs').value=o?o.start:S(start??TODAY);$('#fe').value=o?o.end:S(end??(start??TODAY)+(pid?1:2));
+  $('#fd').checked=!!(o&&o.done);
+  $('#fc').parentElement.hidden=!!pid;$('#sw').parentElement.hidden=!!pid;
+  $('#fstep').hidden=!!pid||!o;
+  if(!pid){color=o?o.color:COLORS[tasks.length%COLORS.length];swatches()}
+  $('#fdel').hidden=!o;$('#fdel').classList.remove('sure');$('#fdel').textContent='Delete';
   $('#ov').classList.add('open');setTimeout(()=>$('#fn').focus(),30);
 }
+const newStep=(pid,a,b)=>{const t=item(pid),s0=a??Math.max(TODAY,N(t.start));openForm(null,s0,b??s0+1,pid)};
 const closeForm=()=>{$('#ov').classList.remove('open');editing=null;tmpClear()};
 $('#sw').addEventListener('click',e=>{const c=e.target.dataset.c;if(c){color=c;swatches()}});
 $('#sw').addEventListener('input',e=>{if(e.target.id==='fcol'){color=e.target.value;$('#sw').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'))}});
 $('#f').addEventListener('submit',e=>{
   e.preventDefault();
   let s=$('#fs').value,en=$('#fe').value;if(!s||!en)return;if(en<s)[s,en]=[en,s];
-  const data={name:$('#fn').value.trim()||'Untitled',course:$('#fc').value.trim(),start:s,end:en,color,done:$('#fd').checked};
-  const id=editing&&editing.id;
-  change(()=>{if(id)Object.assign(tasks.find(t=>t.id===id),data);else tasks.push({id:uid(),...data});fitRange()});
+  const {o,pid}=editing,name=$('#fn').value.trim()||'Untitled',done=$('#fd').checked;
+  if(pid){
+    const oid=o&&o.id;
+    change(()=>{const t=item(pid);if(oid)Object.assign(item(pid,oid),{name,start:s,end:en,done});else stepsOf(t).push({id:uid(),name,start:s,end:en,done});t.open=true;cover(t);fitRange()});
+  }else{
+    const id=o&&o.id,data={name,course:$('#fc').value.trim(),start:s,end:en,color,done};
+    change(()=>{if(id){const t=item(id);Object.assign(t,data);cover(t)}else tasks.push({id:uid(),steps:[],...data});fitRange()});
+  }
   closeForm();
 });
 $('#fx').onclick=closeForm;
+$('#fstep').onclick=()=>{const id=editing.o.id;closeForm();newStep(id)};
 $('#ov').addEventListener('pointerdown',e=>{if(e.target.id==='ov')closeForm()});
 $('#fdel').onclick=()=>{
   const b=$('#fdel');
-  if(!b.classList.contains('sure')){b.classList.add('sure');b.textContent='Really delete?';return}
-  const id=editing.id;change(()=>{tasks=tasks.filter(t=>t.id!==id)});closeForm();
+  if(!b.classList.contains('sure')){b.classList.add('sure');b.textContent=editing.pid?'Really delete?':stepsOf(editing.o).length?'Delete task and its steps?':'Really delete?';return}
+  const {o,pid}=editing;
+  change(()=>{if(pid){const t=item(pid);t.steps=stepsOf(t).filter(x=>x.id!==o.id)}else tasks=tasks.filter(t=>t.id!==o.id)});closeForm();
 };
 
 /* ---------- pointer work on the chart ---------- */
@@ -434,18 +475,18 @@ function tmpClear(){if(tmp){tmp.remove();tmp=null}}
 const dayAt=(track,x)=>Math.floor((x-track.getBoundingClientRect().left)/DW);
 
 $('#g').addEventListener('pointerdown',e=>{
-  if(e.button!==0)return;
+  if(e.button!==0||e.target.closest('.car'))return;
   const bar=e.target.closest('.bar'),track=e.target.closest('.track'),head=e.target.closest('.days');
   if(head){drag={mode:'pan',x0:e.clientX,sl:wrap.scrollLeft};head.setPointerCapture(e.pointerId);e.preventDefault();return}
   if(bar){
-    const t=tasks.find(x=>x.id===bar.dataset.id);
+    const t=item(bar.dataset.id),sid=bar.dataset.s,o=sid?item(t.id,sid):t;
     const mode=e.target.classList.contains('l')?'l':e.target.classList.contains('r')?'r':'m';
-    drag={mode,t,bar,x0:e.clientX,s:N(t.start),en:N(t.end),d:0,moved:false};
+    drag={mode,t,o,sid,bar,x0:e.clientX,s:N(o.start),en:N(o.end),d:0,moved:false};
     bar.setPointerCapture(e.pointerId);bar.classList.add('drag');e.preventDefault();
   }else if(track&&e.pointerType==='mouse'){
     const d=dayAt(track,e.clientX);
     tmpClear();tmp=document.createElement('div');tmp.className='bar tmp';track.appendChild(tmp);
-    drag={mode:'c',track,a:d,b:d};placeTmp();
+    drag={mode:'c',track,p:track.dataset.p,a:d,b:d};placeTmp();
     track.setPointerCapture(e.pointerId);e.preventDefault();
   }
 });
@@ -463,38 +504,52 @@ $('#g').addEventListener('pointermove',e=>{
   drag.bar.style.left=(s-r0)*DW+'px';drag.bar.style.width=(en-s+1)*DW+'px';
   if(drag.moved)showTip(e.clientX,e.clientY,`${fmt(s)} → ${fmt(en)} · ${en-s+1} day${en-s?'s':''}`);
 });
+/* moving a whole task carries its steps with it; a step pushes its task wider if it runs past it */
+function shift(t,o,sid,ns,ne,mode){
+  const dd=ns-N(o.start);o.start=S(ns);o.end=S(ne);
+  if(!sid&&mode==='m'&&dd)for(const x of stepsOf(t)){x.start=S(N(x.start)+dd);x.end=S(N(x.end)+dd)}
+  cover(t);fitRange();
+}
 function endDrag(){
   if(!drag)return;const g=drag;drag=null;tip.style.display='none';
   if(g.mode==='pan')return wrap.dispatchEvent(new Event('scroll'));
-  if(g.mode==='c'){const a=Math.min(g.a,g.b),b=Math.max(g.a,g.b);openForm(null,r0+a,r0+(a===b?a+2:b));return}
+  if(g.mode==='c'){const a=Math.min(g.a,g.b),b=Math.max(g.a,g.b);if(g.p)newStep(g.p,r0+a,r0+(a===b?a+1:b));else openForm(null,r0+a,r0+(a===b?a+2:b));return}
   g.bar.classList.remove('drag');
-  if(!g.moved){openForm(g.t);return}
+  if(!g.moved){openForm(g.o,null,null,g.sid?g.t.id:null);return}
   if(g.ns==null||(g.ns===g.s&&g.ne===g.en))return render();
-  change(()=>{g.t.start=S(g.ns);g.t.end=S(g.ne);fitRange()});
+  change(()=>shift(g.t,g.o,g.sid,g.ns,g.ne,g.mode));
 }
 $('#g').addEventListener('pointerup',endDrag);
 $('#g').addEventListener('pointercancel',()=>{if(drag){drag=null;tip.style.display='none';tmpClear();render()}});
 $('#g').addEventListener('click',e=>{
+  const tg=e.target.closest('[data-tog]');
+  if(tg){const t=item(tg.dataset.tog);t.open=!t.open;save();render();document.querySelector(`[data-tog="${t.id}"]`)?.focus();return}
   if(e.target.closest('[data-new]'))return openForm(null,TODAY);
-  const ed=e.target.closest('.lab[data-edit]');if(ed)openForm(tasks.find(t=>t.id===ed.dataset.edit));
+  const ns=e.target.closest('[data-newstep]');if(ns)return newStep(ns.dataset.newstep);
+  const ed=e.target.closest('.lab[data-edit]');if(ed){const sid=ed.dataset.s;return openForm(item(ed.dataset.edit,sid),null,null,sid?ed.dataset.edit:null)}
   const tr=e.target.closest('.track');
-  if(tr&&!e.target.closest('.bar')&&e.pointerType&&e.pointerType!=='mouse')openForm(null,r0+dayAt(tr,e.clientX));
+  if(tr&&!e.target.closest('.bar')&&e.pointerType&&e.pointerType!=='mouse'){const d=r0+dayAt(tr,e.clientX);if(tr.dataset.p)newStep(tr.dataset.p,d);else openForm(null,d)}
 });
 $('#g').addEventListener('keydown',e=>{
-  const id=e.target.dataset.edit||e.target.dataset.id;
+  if(e.target.closest('.car'))return;
   if(e.key==='Enter'&&e.target.dataset.new)return openForm(null,TODAY);
-  if(!id)return;const t=tasks.find(x=>x.id===id);if(!t)return;
-  if(e.key==='Enter'){e.preventDefault();openForm(t)}
+  if(e.key==='Enter'&&e.target.dataset.newstep)return newStep(e.target.dataset.newstep);
+  const pid=e.target.dataset.edit||e.target.dataset.id,sid=e.target.dataset.s;
+  if(!pid)return;const t=item(pid),o=sid?item(pid,sid):t;if(!o)return;
+  if(e.key==='Enter'){e.preventDefault();openForm(o,null,null,sid?pid:null)}
   if(e.target.classList.contains('bar')&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){
-    e.preventDefault();const k=e.key==='ArrowLeft'?-1:1;
-    change(()=>{if(e.shiftKey)t.end=S(Math.max(N(t.end)+k,N(t.start)));else{t.start=S(N(t.start)+k);t.end=S(N(t.end)+k)}});
-    document.querySelector(`.bar[data-id="${id}"]`)?.focus();
+    e.preventDefault();const k=e.key==='ArrowLeft'?-1:1,s0=N(o.start),e0=N(o.end);
+    change(()=>{if(e.shiftKey)shift(t,o,sid,s0,Math.max(e0+k,s0),'r');else shift(t,o,sid,s0+k,e0+k,'m')});
+    document.querySelector(`.bar[data-id="${pid}"]${sid?`[data-s="${sid}"]`:':not([data-s])'}`)?.focus();
   }
 });
 
 /* ---------- side rail + toolbar ---------- */
-$('#side').addEventListener('change',e=>{const id=e.target.dataset.tick;if(id)change(()=>{const t=tasks.find(x=>x.id===id);t.done=e.target.checked})});
-$('#side').addEventListener('click',e=>{const el=e.target.closest('[data-edit]');if(el)openForm(tasks.find(t=>t.id===el.dataset.edit))});
+$('#side').addEventListener('change',e=>{
+  const id=e.target.dataset.tick;if(id)return change(()=>{item(id).done=e.target.checked});
+  const st=e.target.dataset.stick;if(st){const [p,s]=st.split(':');change(()=>{item(p,s).done=e.target.checked})}
+});
+$('#side').addEventListener('click',e=>{const el=e.target.closest('[data-edit]');if(el)openForm(item(el.dataset.edit))});
 $('#add').onclick=()=>openForm(null,TODAY);
 $('#prev').onclick=()=>wrap.scrollBy({left:-7*DW,behavior:'smooth'});
 $('#next').onclick=()=>wrap.scrollBy({left:7*DW,behavior:'smooth'});
@@ -530,13 +585,17 @@ $('#td').addEventListener('keydown',e=>{if(e.key==='Enter')$('#tadd').click()});
 $('#tpull').onclick=()=>{const p=$('#pick');p.hidden=!p.hidden;$('#tpull').setAttribute('aria-expanded',!p.hidden);renderPick()};
 function renderPick(){
   const p=$('#pick');if(p.hidden)return;
-  const open=tasks.filter(t=>!t.done);
-  const todayT=open.filter(t=>N(t.start)<=TODAY&&N(t.end)>=TODAY),later=open.filter(t=>!todayT.includes(t));
+  /* a task with steps offers its steps, not the task itself */
+  const ents=[];
+  for(const t of tasks){if(t.done)continue;const st=stepsOf(t).filter(x=>!x.done);
+    if(stepsOf(t).length)st.forEach(x=>ents.push({o:x,t,sid:x.id}));else ents.push({o:t,t})}
   const on=new Set(todos.map(x=>x.from));
-  const item=t=>`<button class="pi" data-pull="${t.id}"><span class="dot" style="background:${t.color}"></span><span class="t">${esc(t.name)}</span><span class="w">${on.has(t.id)?'Added · add again':'Due '+fmt(N(t.end))}</span></button>`;
-  p.innerHTML=open.length?`<p>Pick a task to copy into your list. It starts at 1h; change the time once it's added. The copy won't change the chart.</p>${todayT.length?'<h3 style="margin:8px">Today</h3>'+todayT.map(item).join(''):''}${later.length?'<h3 style="margin:8px">Other open tasks</h3>'+later.map(item).join(''):''}`:'<p>No open tasks on the chart yet.</p>';
+  const row=en=>`<button class="pi" data-pull="${en.t.id}"${en.sid?` data-ps="${en.sid}"`:''}><span class="dot" style="background:${en.t.color}"></span><span class="t">${en.sid?`<span style="color:var(--sub);font-weight:500">${esc(en.t.name)} ›</span> `:''}${esc(en.o.name)}</span><span class="w">${on.has(en.o.id)?'Added · add again':'Due '+fmt(N(en.o.end))}</span></button>`;
+  const td=ents.filter(en=>covers(en.o)),later=ents.filter(en=>!td.includes(en));
+  p.innerHTML=ents.length?`<p>Pick something to copy into your list. Tasks with steps show their steps. Each starts at 1h; change the time once it's added. The copy won't change the chart.</p>${td.length?'<h3 style="margin:8px">Today</h3>'+td.map(row).join(''):''}${later.length?'<h3 style="margin:8px">Other open work</h3>'+later.map(row).join(''):''}`:'<p>No open tasks on the chart yet.</p>';
 }
-$('#pick').addEventListener('click',e=>{const b=e.target.closest('[data-pull]');if(!b)return;const t=tasks.find(x=>x.id===b.dataset.pull);if(t){addTodo(t.name,60,{color:t.color,src:'chart',from:t.id,course:t.course||''});renderPick()}});
+$('#pick').addEventListener('click',e=>{const b=e.target.closest('[data-pull]');if(!b)return;const t=item(b.dataset.pull),sid=b.dataset.ps,o=sid?item(t.id,sid):t;if(!o)return;
+  addTodo(o.name,60,{color:t.color,src:'chart',from:o.id,course:sid?t.name:(t.course||'')});renderPick()});
 
 let selecting=false,sel=new Set(),openNotes=new Set(),rd=null;
 const GRIP='<svg viewBox="0 0 10 16"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></svg>';
@@ -691,7 +750,7 @@ function apply(d){
 }
 function useLocal(){
   let saved=null;try{saved=JSON.parse(localStorage.getItem('gantt-state'));if(!saved){const old=JSON.parse(localStorage.getItem('gantt-tasks'));if(Array.isArray(old))saved={tasks:old}}}catch(e){}
-  if(saved){apply(saved);isSample=false}else{tasks=samples();isSample=true}
+  if(saved){apply(saved);isSample=false}else{tasks=withSteps(samples());isSample=true}
 }
 useLocal();fitRange();render();route();goDay(TODAY-3);status('Saved in this browser only');
 /* ---------- Firebase sign-in + sync ---------- */
