@@ -42,7 +42,18 @@ main[hidden]{display:none}
 .g{position:relative}
 .ghead{position:sticky;top:0;z-index:5;display:flex;background:var(--bg);border-bottom:1px solid var(--line)}
 .corner{position:sticky;left:0;z-index:6;width:var(--lab);flex:none;background:var(--bg);border-right:1px solid var(--line);padding:30px 14px 8px;font-size:13px;color:var(--sub);font-weight:600}
-.days{display:flex;flex:none;cursor:ew-resize}
+.days{display:flex;flex:none;cursor:pointer}
+.day:hover b{text-decoration:underline}
+.day.picked b{background:var(--ink);color:var(--bg);border-radius:6px;margin:0 auto;width:26px}
+.col.picked{background:light-dark(rgba(25,25,28,.06),rgba(255,255,255,.07))!important;border-left:2px solid var(--ink)}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.nav{display:flex;gap:6px}
+.nav button{width:38px;height:38px;min-height:38px;padding:0;border-radius:50%;display:grid;place-items:center;background:var(--bg);color:var(--ink)}
+.nav button:hover{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.nav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dl{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-height:30px}
+.back{min-height:28px;padding:0 11px;border:0;border-radius:99px;background:var(--acc);color:#fff;font-size:13px;font-weight:700}
+.back:hover{opacity:.88}
 .day{flex:none;text-align:center;font-size:13px;padding:24px 0 8px;border-left:1px solid transparent;position:relative}
 .day b{display:block;font-size:15px;font-weight:700}
 .day span{color:var(--sub);font-size:11px}
@@ -182,7 +193,7 @@ form .chk{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15p
 <header>
   <div>
     <h1>My schoolwork</h1>
-    <p class="hint" id="hint">Scroll sideways to move through time. Click or drag across empty space to add a task. Drag a bar to move it, or its ends to change how long it runs.</p>
+    <p class="hint" id="hint">Scroll sideways to move through time. Click a date to see that day on the right. Click or drag across empty space to add a task. Drag a bar to move it, or its ends to change how long it runs.</p>
   </div>
   <div class="tools">
     <span id="chartTools" class="tools">
@@ -359,8 +370,8 @@ function render(){
   for(let i=0;i<SPAN;i++){
     const n=r0+i,d=dt(n),wd=d.getUTCDay(),md=d.getUTCDate();
     const showMo=i===0||md===1;
-    days+=`<div class="day${n===TODAY?' today':''}${showMo?' first':''}" style="width:${DW}px">${showMo?`<span class="mo">${MON[d.getUTCMonth()]} ${d.getUTCFullYear()!==now0.getFullYear()?d.getUTCFullYear():''}</span>`:''}<b>${md}</b><span>${DW>=40?WD[wd]:WD[wd][0]}</span></div>`;
-    cols+=`<div class="col${wd===0||wd===6?' we':''}${n===TODAY?' today':''}" style="width:${DW}px"></div>`;
+    days+=`<div class="day${n===TODAY?' today':''}${n===pday&&n!==TODAY?' picked':''}${showMo?' first':''}" style="width:${DW}px">${showMo?`<span class="mo">${MON[d.getUTCMonth()]} ${d.getUTCFullYear()!==now0.getFullYear()?d.getUTCFullYear():''}</span>`:''}<b>${md}</b><span>${DW>=40?WD[wd]:WD[wd][0]}</span></div>`;
+    cols+=`<div class="col${n===pday&&n!==TODAY?' picked':''}${wd===0||wd===6?' we':''}${n===TODAY?' today':''}" style="width:${DW}px"></div>`;
   }
   const bar=(o,t,sid)=>{const a=N(o.start)-r0,b=N(o.end)-r0+1,c=sid?`color-mix(in srgb,${t.color} 72%,var(--bg))`:t.color;
     const st=stepsOf(t),lbl=esc(o.name)+(!sid&&st.length?` · ${st.filter(x=>x.done).length}/${st.length}`:'');
@@ -381,6 +392,7 @@ function render(){
   side();
 }
 const wrap=$('#wrap');
+const labW=()=>$('.corner').offsetWidth;
 const leftDay=()=>r0+wrap.scrollLeft/DW;
 const goDay=(n,smooth)=>wrap.scrollTo({left:(n-r0)*DW,behavior:smooth?'smooth':'auto'});
 /* grow the timeline when you scroll near either end */
@@ -400,26 +412,34 @@ wrap.addEventListener('wheel',e=>{
 },{passive:false});
 
 /* ---------- today rail ---------- */
-const covers=o=>N(o.start)<=TODAY&&N(o.end)>=TODAY;
-const dueTxt=e=>{const left=e-TODAY;return left<0?`${-left}d late`:left===0?'Due today':left===1?'Due tomorrow':`Due ${fmt(e).split(' ')[0]}${left>6?' '+fmt(e).slice(4):''}`};
+const covers=(o,D=TODAY)=>N(o.start)<=D&&N(o.end)>=D;
+let pday=TODAY;
+const WDL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const dayTitle=D=>D===TODAY?'Today':D===TODAY+1?'Tomorrow':D===TODAY-1?'Yesterday':WDL[dt(D).getUTCDay()];
+function pickDay(D){
+  pday=D;render();
+  const x=(D-r0)*DW,l=wrap.scrollLeft,w=wrap.clientWidth-labW();
+  if(x<l||x+DW>l+w)goDay(D-3,true);
+}
+const dueTxt=(e,D=TODAY)=>{const left=e-D,t=D===TODAY;return left<0?`${-left}d late`:left===0?(t?'Due today':'Due this day'):left===1?(t?'Due tomorrow':'Due next day'):`Due ${fmt(e).split(' ')[0]}${left>6?' '+fmt(e).slice(4):''}`};
 function side(){
   /* only steps show here; a task with no steps never appears */
   const ents=[];
   for(const t of tasks)stepsOf(t).forEach(x=>ents.push({o:x,t,sid:x.id}));
-  const now=ents.filter(en=>covers(en.o)).sort((a,b)=>a.o.done-b.o.done||a.o.end.localeCompare(b.o.end));
-  const late=ents.filter(en=>!en.o.done&&!en.t.done&&N(en.o.end)<TODAY);
-  const soon=ents.filter(en=>N(en.o.start)>TODAY&&N(en.o.start)<=TODAY+7).sort((a,b)=>a.o.start.localeCompare(b.o.start));
+  const D=pday,now=ents.filter(en=>covers(en.o,D)).sort((a,b)=>a.o.done-b.o.done||a.o.end.localeCompare(b.o.end));
+  const late=D===TODAY?ents.filter(en=>!en.o.done&&!en.t.done&&N(en.o.end)<TODAY):[];
+  const soon=ents.filter(en=>N(en.o.start)>D&&N(en.o.start)<=D+7).sort((a,b)=>a.o.start.localeCompare(b.o.start));
   const card=({o,t,sid})=>{
-    const s=N(o.start),e=N(o.end),left=e-TODAY,len=e-s+1,pos=TODAY-s+1,done=o.done||(!!sid&&t.done);
+    const s=N(o.start),e=N(o.end),left=e-D,len=e-s+1,pos=D-s+1,done=o.done||(!!sid&&t.done);
     const tag=sid?esc(t.name):(t.course?esc(t.course):'');
-    return `<div class="card${done?' done':''}" style="border-left-color:${t.color}"><input type="checkbox" data-tick="${t.id}"${sid?` data-s="${sid}"`:''} ${done?'checked':''} aria-label="Mark ${esc(o.name)} finished"><div class="n" data-edit="${t.id}"${sid?` data-s="${sid}"`:''}>${esc(o.name)}</div><span class="due${left<=1&&!done?' hot':''}">${dueTxt(e)}</span><div class="m">${tag?tag+' · ':''}${left<0?'Was due '+fmt(e):`Day ${Math.min(pos,len)} of ${len}`}</div><div class="meter"><i style="width:${Math.min(100,Math.max(0,pos/len*100))}%;background:${t.color}"></i></div></div>`;
+    return `<div class="card${done?' done':''}" style="border-left-color:${t.color}"><input type="checkbox" data-tick="${t.id}"${sid?` data-s="${sid}"`:''} ${done?'checked':''} aria-label="Mark ${esc(o.name)} finished"><div class="n" data-edit="${t.id}"${sid?` data-s="${sid}"`:''}>${esc(o.name)}</div><span class="due${left<=1&&!done?' hot':''}">${dueTxt(e,D)}</span><div class="m">${tag?tag+' · ':''}${left<0?'Was due '+fmt(e):`Day ${Math.min(pos,len)} of ${len}`}</div><div class="meter"><i style="width:${Math.min(100,Math.max(0,pos/len*100))}%;background:${t.color}"></i></div></div>`;
   };
   const open=now.filter(en=>!en.o.done).length;
-  $('#side').innerHTML=`<h2>Today</h2><p class="date">${fmt(TODAY)} · ${open?open+' to work on':'nothing open'}</p>
-  ${now.length?now.map(card).join(''):`<div class="empty">${tasks.some(t=>stepsOf(t).length)?'No steps fall on today.':'Steps you add to your tasks show up here on the days they cover. Open a task with ▸ and click + Add step.'}</div>`}
+  $('#side').innerHTML=`<div class="ph"><h2>${dayTitle(D)}</h2><div class="nav"><button data-pd="-1" aria-label="Previous day" title="Previous day"><svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></svg></button><button data-pd="1" aria-label="Next day" title="Next day"><svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button></div></div><div class="date dl"><span>${fmt(D)} · ${open?open+' to work on':'nothing open'}</span></div>
+  ${now.length?now.map(card).join(''):`<div class="empty">${tasks.some(t=>stepsOf(t).length)?(D===TODAY?'No steps fall on today.':'No steps fall on this day.'):'Steps you add to your tasks show up here on the days they cover. Open a task with ▸ and click + Add step.'}</div>`}
   ${late.length?`<h3>Overdue</h3>${late.map(card).join('')}`:''}
-  <h3>Starting this week</h3>
-  ${soon.length?soon.map(({o,t,sid})=>`<div class="soon" data-edit="${t.id}"${sid?` data-s="${sid}"`:''}><span class="dot" style="background:${t.color}"></span><span class="t">${sid?`<span style="color:var(--sub)">${esc(t.name)} ›</span> `:''}${esc(o.name)}</span><span class="w">${fmt(N(o.start))}</span></div>`).join(''):'<p class="date">Nothing new starts in the next 7 days.</p>'}`;
+  <h3>${D===TODAY?'Starting this week':'Starting in the week after'}</h3>
+  ${soon.length?soon.map(({o,t,sid})=>`<div class="soon" data-edit="${t.id}"${sid?` data-s="${sid}"`:''}><span class="dot" style="background:${t.color}"></span><span class="t">${sid?`<span style="color:var(--sub)">${esc(t.name)} ›</span> `:''}${esc(o.name)}</span><span class="w">${fmt(N(o.start))}</span></div>`).join(''):`<p class="date">Nothing new starts in the next 7 days.</p>`}`;
 }
 
 /* ---------- task / step dialog ---------- */
@@ -480,7 +500,7 @@ const dayAt=(track,x)=>Math.floor((x-track.getBoundingClientRect().left)/DW);
 $('#g').addEventListener('pointerdown',e=>{
   if(e.button!==0||e.target.closest('.car'))return;
   const bar=e.target.closest('.bar'),track=e.target.closest('.track'),head=e.target.closest('.days');
-  if(head){drag={mode:'pan',x0:e.clientX,sl:wrap.scrollLeft};head.setPointerCapture(e.pointerId);e.preventDefault();return}
+  if(head){drag={mode:'pan',lastX:e.clientX,x0:e.clientX,sl:wrap.scrollLeft,day:r0+Math.floor((e.clientX-head.getBoundingClientRect().left)/DW)};head.setPointerCapture(e.pointerId);e.preventDefault();return}
   if(bar){
     const t=item(bar.dataset.id),sid=bar.dataset.s,o=sid?item(t.id,sid):t;
     const mode=e.target.classList.contains('l')?'l':e.target.classList.contains('r')?'r':'m';
@@ -496,7 +516,7 @@ $('#g').addEventListener('pointerdown',e=>{
 function placeTmp(){const a=Math.min(drag.a,drag.b),b=Math.max(drag.a,drag.b);tmp.style.left=a*DW+'px';tmp.style.width=(b-a+1)*DW+'px'}
 $('#g').addEventListener('pointermove',e=>{
   if(!drag)return;
-  if(drag.mode==='pan'){wrap.scrollLeft=drag.sl-(e.clientX-drag.x0);return}
+  if(drag.mode==='pan'){drag.lastX=e.clientX;wrap.scrollLeft=drag.sl-(e.clientX-drag.x0);return}
   if(drag.mode==='c'){drag.b=dayAt(drag.track,e.clientX);placeTmp();const a=Math.min(drag.a,drag.b),b=Math.max(drag.a,drag.b);showTip(e.clientX,e.clientY,`${fmt(r0+a)} → ${fmt(r0+b)}`);return}
   const d=Math.round((e.clientX-drag.x0)/DW);
   if(Math.abs(e.clientX-drag.x0)>4)drag.moved=true;
@@ -515,7 +535,7 @@ function shift(t,o,sid,ns,ne,mode){
 }
 function endDrag(){
   if(!drag)return;const g=drag;drag=null;tip.style.display='none';
-  if(g.mode==='pan')return wrap.dispatchEvent(new Event('scroll'));
+  if(g.mode==='pan'){if(Math.abs(g.lastX-g.x0)<5)return pickDay(g.day);return wrap.dispatchEvent(new Event('scroll'))}
   if(g.mode==='c'){const a=Math.min(g.a,g.b),b=Math.max(g.a,g.b);if(g.p)newStep(g.p,r0+a,r0+(a===b?a+1:b));else openForm(null,r0+a,r0+(a===b?a+2:b));return}
   g.bar.classList.remove('drag');
   if(!g.moved){openForm(g.o,null,null,g.sid?g.t.id:null);return}
@@ -552,11 +572,11 @@ $('#side').addEventListener('change',e=>{
   const id=e.target.dataset.tick;if(!id)return;const sid=e.target.dataset.s;
   change(()=>{item(id,sid).done=e.target.checked});
 });
-$('#side').addEventListener('click',e=>{const el=e.target.closest('[data-edit]');if(!el)return;const sid=el.dataset.s;openForm(item(el.dataset.edit,sid),null,null,sid?el.dataset.edit:null)});
+$('#side').addEventListener('click',e=>{const pd=e.target.closest('[data-pd]');if(pd){const k=+pd.dataset.pd;return pickDay(k?pday+k:TODAY)}const el=e.target.closest('[data-edit]');if(!el)return;const sid=el.dataset.s;openForm(item(el.dataset.edit,sid),null,null,sid?el.dataset.edit:null)});
 $('#add').onclick=()=>openForm(null,TODAY);
 $('#prev').onclick=()=>wrap.scrollBy({left:-7*DW,behavior:'smooth'});
 $('#next').onclick=()=>wrap.scrollBy({left:7*DW,behavior:'smooth'});
-$('#tod').onclick=()=>goDay(TODAY-3,true);
+$('#tod').onclick=()=>{pday=TODAY;render();goDay(TODAY-3,true)};
 $('#zoom').addEventListener('click',e=>{const z=+e.target.dataset.z;if(!z)return;const at=leftDay();DW=z;try{localStorage.setItem('gantt-zoom',z)}catch(x){}render();goDay(at)});
 $('#undo').onclick=undo;
 $('#clear').onclick=()=>change(()=>{tasks=[]});
@@ -740,7 +760,7 @@ function route(){
   $('#chartView').hidden=todo;$('#todoView').hidden=!todo;$('#chartTools').hidden=todo;
   $('#tabChart').toggleAttribute('aria-current',!todo);$('#tabTodo').toggleAttribute('aria-current',todo);
   if(todo){$('#tabTodo').setAttribute('aria-current','page');renderTodo()}else $('#tabChart').setAttribute('aria-current','page');
-  $('#hint').textContent=todo?'Plan tonight: add tasks with how long they\'ll take, set when you want to stop, and start a timer as you work.':'Scroll sideways to move through time. Click or drag across empty space to add a task. Drag a bar to move it, or its ends to change how long it runs.';
+  $('#hint').textContent=todo?'Plan tonight: add tasks with how long they\'ll take, set when you want to stop, and start a timer as you work.':'Scroll sideways to move through time. Click a date to see that day on the right. Click or drag across empty space to add a task. Drag a bar to move it, or its ends to change how long it runs.';
   $('#sample').hidden=todo||!isSample;
 }
 addEventListener('hashchange',route);
