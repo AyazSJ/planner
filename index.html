@@ -112,6 +112,17 @@ h3{font-size:13px;color:var(--sub);margin:22px 0 10px;font-weight:700}
 .note{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--sub);padding:8px max(3vw,16px);background:var(--panel);border-bottom:1px solid var(--line)}
 .note button{min-height:32px;font-size:13px}
 /* to-do tab */
+.dayhead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.pills{display:flex;flex-wrap:wrap;gap:2px;margin:8px 0 18px 0;align-items:center}
+.pills .lbl{font-size:13px;color:var(--sub);margin-right:6px}
+.pill{min-height:30px;border:0;background:transparent;padding:0 10px;border-radius:99px;font-size:13px;font-weight:600;color:var(--sub)}
+.pill:hover{color:var(--ink);background:var(--panel)}
+.pill.on{background:var(--ink);color:var(--bg)}
+.pill i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--acc);margin-left:6px;vertical-align:1px}
+.ptitle{margin:0;font-size:clamp(30px,3.6vw,40px);line-height:1.05;font-weight:800;letter-spacing:-.02em}
+.times{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.snote{margin:-6px 0 0;font-size:13px;color:var(--sub)}
+.ptitle .pd{display:block;font-size:15px;font-weight:600;letter-spacing:0;color:var(--sub);margin-top:6px}
 .tl{overflow:auto;padding:22px max(3vw,16px) 40px}
 .addrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .addrow input{min-height:44px;border:1px solid var(--line);border-radius:8px;padding:0 12px;font-size:16px;background:var(--bg)}
@@ -154,7 +165,8 @@ h3{font-size:13px;color:var(--sub);margin:22px 0 10px;font-weight:700}
 .item.up .clock{color:var(--bad)}
 .x{border:0;background:transparent;color:var(--sub);font-size:22px;width:36px;padding:0}
 .prog{position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:0 0 8px 0;overflow:hidden}.prog i{display:block;height:100%;background:var(--c)}
-.sum{display:grid;gap:14px}
+.sum{display:grid;gap:14px;align-content:start}
+.times input[type=time]{font-size:17px!important;padding:0 8px!important;width:100%}
 .sum label{display:grid;gap:6px;font-size:13px;font-weight:600;color:var(--sub)}
 .sum input[type=time]{min-height:48px;border:1px solid var(--line);border-radius:8px;padding:0 12px;font-size:20px;font-weight:700;background:var(--bg)}
 .big{font-size:clamp(34px,4vw,46px);line-height:1.02;font-weight:800;letter-spacing:-.02em}
@@ -226,6 +238,8 @@ form .chk{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15p
 
 <main id="todoView" hidden>
   <section class="tl">
+    <div class="dayhead"><h2 class="ptitle" id="ptitle"></h2><div class="nav"><button data-tstep="-1" aria-label="Previous day" title="Previous day"><svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></svg></button><button data-tstep="1" aria-label="Next day" title="Next day"><svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button></div></div>
+    <div class="pills" id="chips" aria-label="Plan another day"></div>
     <div class="addrow">
       <input id="tn" type="text" placeholder="Add your own task…" aria-label="Task name">
       <input id="td" type="text" value="30m" aria-label="How long (e.g. 45m, 1h 30m)">
@@ -237,7 +251,8 @@ form .chk{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15p
     <ul class="list" id="todoList"></ul>
   </section>
   <aside class="sum" id="sum">
-    <label>End of work session<input type="time" id="send" value="22:00"></label>
+    <div class="times"><label id="sstartL">Start of work session<input type="time" id="sstart" value="18:00"></label><label>End of work session<input type="time" id="send" value="22:00"></label></div>
+    <p class="snote" id="snote">Today always counts from the current time.</p>
     <div class="big" id="sBig"></div>
     <div class="strip" id="strip" aria-hidden="true"></div>
     <div class="ends"><span id="sNow"></span><span id="sEnd"></span></div>
@@ -317,7 +332,7 @@ const parseDur=v=>{v=String(v).trim().toLowerCase();let m;
   if(h||mi)return Math.round((h?+h[1]*60:0)+(mi?+mi[1]:0));
   if(/^\d+(\.\d+)?$/.test(v))return Math.round(+v);return null};
 
-let tasks=[],todos=[],sessionEnd='22:00',isSample=false,hist=[],DW=40,ref=null;
+let tasks=[],todos=[],plans={},sessionEnd='22:00',sessionStart='18:00',isSample=false,hist=[],DW=40,ref=null;
 let r0=TODAY-35,r1=TODAY+120;
 try{const z=+localStorage.getItem('gantt-zoom');if(z)DW=z}catch(e){}
 
@@ -337,7 +352,7 @@ function cover(t){for(const x of stepsOf(t)){if(x.start<t.start)t.start=x.start;
 /* ---------- saving ---------- */
 const status=t=>$('#status').textContent=t;
 let timer=0,writing=false,again=false;
-const payload=()=>({tasks,todos,sessionEnd,updated:Date.now()});
+const payload=()=>({tasks,todos,plans,sessionEnd,sessionStart,updated:Date.now()});
 async function flush(){
   if(!ref)return;
   if(writing){again=true;return}
@@ -455,7 +470,7 @@ function openForm(o,start,end,pid){
   $('#fnl').firstChild.textContent=pid?'Step name':'Assignment name';
   $('#fn').placeholder=pid?'e.g. Rough sketches':'e.g. Reading response 4';
   $('#fn').value=o?o.name:'';$('#fc').value=o&&!pid?o.course||'':'';
-  $('#fs').value=o?o.start:S(start??TODAY);$('#fe').value=o?o.end:S(end??(start??TODAY)+(pid?1:2));
+  $('#fs').value=o?o.start:S(start??TODAY);$('#fe').value=o?o.end:S(end??(start??TODAY));
   $('#fd').checked=!!(o&&o.done);
   $('#fc').parentElement.hidden=!!pid;$('#sw').parentElement.hidden=!!pid;
   $('#fstep').hidden=!!pid||!o;
@@ -463,7 +478,7 @@ function openForm(o,start,end,pid){
   $('#fdel').hidden=!o;$('#fdel').classList.remove('sure');$('#fdel').textContent='Delete';
   $('#ov').classList.add('open');setTimeout(()=>$('#fn').focus(),30);
 }
-const newStep=(pid,a,b)=>{const t=item(pid),s0=a??Math.max(TODAY,N(t.start));openForm(null,s0,b??s0+1,pid)};
+const newStep=(pid,a,b)=>{const t=item(pid),s0=a??Math.max(TODAY,N(t.start));openForm(null,s0,b??s0,pid)};
 const closeForm=()=>{$('#ov').classList.remove('open');editing=null;tmpClear()};
 $('#sw').addEventListener('click',e=>{const c=e.target.dataset.c;if(c){color=c;swatches()}});
 $('#sw').addEventListener('input',e=>{if(e.target.id==='fcol'){color=e.target.value;$('#sw').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'))}});
@@ -536,7 +551,7 @@ function shift(t,o,sid,ns,ne,mode){
 function endDrag(){
   if(!drag)return;const g=drag;drag=null;tip.style.display='none';
   if(g.mode==='pan'){if(Math.abs(g.lastX-g.x0)<5)return pickDay(g.day);return wrap.dispatchEvent(new Event('scroll'))}
-  if(g.mode==='c'){const a=Math.min(g.a,g.b),b=Math.max(g.a,g.b);if(g.p)newStep(g.p,r0+a,r0+(a===b?a+1:b));else openForm(null,r0+a,r0+(a===b?a+2:b));return}
+  if(g.mode==='c'){const a=Math.min(g.a,g.b),b=Math.max(g.a,g.b);if(g.p)newStep(g.p,r0+a,r0+b);else openForm(null,r0+a,r0+b);return}
   g.bar.classList.remove('drag');
   if(!g.moved){openForm(g.o,null,null,g.sid?g.t.id:null);return}
   if(g.ns==null||(g.ns===g.s&&g.ne===g.en))return render();
@@ -595,9 +610,36 @@ function beep(){
   if(!actx)return;
   [0,.28,.56].forEach(o=>{const g=actx.createGain(),os=actx.createOscillator();os.frequency.value=880;os.connect(g);g.connect(actx.destination);const t0=actx.currentTime+o;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.3,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.22);os.start(t0);os.stop(t0+.25)});
 }
-function addTodo(name,mins,extra){
-  change(()=>todos.push({id:uid(),name,mins,done:false,color:COLORS[todos.length%COLORS.length],src:'own',el:0,run:null,...extra}),true);
+let tday=TODAY;
+const dkey=()=>S(tday);
+const dayList=(d=tday)=>todos.filter(t=>t.day===S(d));
+const plan=d=>plans[S(d)]||{};
+const localDate=d=>{const x=dt(d);return new Date(x.getUTCFullYear(),x.getUTCMonth(),x.getUTCDate())};
+const at=(d,hhmm)=>{const [h,m]=hhmm.split(':').map(Number),x=localDate(d);x.setHours(h,m,0,0);return x};
+/* today runs from right now; any other day runs from its planned start time */
+function sessionTimes(){
+  const now=new Date(),isToday=tday===TODAY,endS=plan(tday).end||sessionEnd;
+  if(isToday){const e=at(TODAY,endS);if(e<now&&now-e>3*36e5)e.setDate(e.getDate()+1);return {start:now,end:e,isToday}}
+  const st=at(tday,plan(tday).start||sessionStart),e=at(tday,endS);if(e<=st)e.setDate(e.getDate()+1);
+  return {start:st,end:e,isToday};
 }
+function addTodo(name,mins,extra){
+  change(()=>todos.push({id:uid(),name,mins,done:false,color:COLORS[dayList().length%COLORS.length],src:'own',el:0,run:null,day:dkey(),...extra}),true);
+}
+function renderWeek(){
+  /* today is the main view; other days sit in a quiet row of links */
+  const w0=tday>=TODAY&&tday<=TODAY+6?TODAY:tday-3;let h='<span class="lbl">Plan another day</span>';
+  if(w0!==TODAY)h+=`<button class="pill" data-td="${TODAY}">Today${dayList(TODAY).some(t=>!t.done)?'<i></i>':''}</button><span class="lbl" style="margin:0 4px">…</span>`;
+  for(let i=0;i<7;i++){const d=w0+i,has=dayList(d).some(t=>!t.done);
+    h+=`<button class="pill${d===tday?' on':''}" data-td="${d}" aria-pressed="${d===tday}">${d===TODAY?'Today':WD[dt(d).getUTCDay()]+' '+dt(d).getUTCDate()}${has&&d!==tday?'<i aria-label="has a plan"></i>':''}</button>`}
+  $('#chips').innerHTML=h;
+  const name=tday===TODAY?'Today':tday===TODAY+1?'Tomorrow':tday===TODAY-1?'Yesterday':WDL[dt(tday).getUTCDay()];
+  $('#ptitle').innerHTML=`${name}<span class="pd">${tday===TODAY?'':tday<TODAY?'Looking back · ':'Planning ahead · '}${fmt(tday)}</span>`;
+}
+$('#todoView').addEventListener('click',e=>{
+  const c=e.target.closest('[data-td]');if(c){tday=+c.dataset.td;selecting=false;sel.clear();renderTodo();return}
+  const w=e.target.closest('[data-tstep]');if(w){tday+=+w.dataset.tstep;selecting=false;sel.clear();renderTodo()}
+});
 $('#tadd').onclick=()=>{
   const n=$('#tn').value.trim();if(!n)return $('#tn').focus();
   const m=parseDur($('#td').value)??30;
@@ -614,8 +656,8 @@ function renderPick(){
     if(stepsOf(t).length)st.forEach(x=>ents.push({o:x,t,sid:x.id}));else ents.push({o:t,t})}
   const on=new Set(todos.map(x=>x.from));
   const row=en=>`<button class="pi" data-pull="${en.t.id}"${en.sid?` data-ps="${en.sid}"`:''}><span class="dot" style="background:${en.t.color}"></span><span class="t">${en.sid?`<span style="color:var(--sub);font-weight:500">${esc(en.t.name)} ›</span> `:''}${esc(en.o.name)}</span><span class="w">${on.has(en.o.id)?'Added · add again':'Due '+fmt(N(en.o.end))}</span></button>`;
-  const td=ents.filter(en=>covers(en.o)),later=ents.filter(en=>!td.includes(en));
-  p.innerHTML=ents.length?`<p>Pick something to copy into your list. Tasks with steps show their steps. Each starts at 1h; change the time once it's added. The copy won't change the chart.</p>${td.length?'<h3 style="margin:8px">Today</h3>'+td.map(row).join(''):''}${later.length?'<h3 style="margin:8px">Other open work</h3>'+later.map(row).join(''):''}`:'<p>No open tasks on the chart yet.</p>';
+  const td=ents.filter(en=>covers(en.o,tday)),later=ents.filter(en=>!td.includes(en));
+  p.innerHTML=ents.length?`<p>Pick something to copy into your list. Tasks with steps show their steps. Each starts at 1h; change the time once it's added. The copy won't change the chart.</p>${td.length?'<h3 style="margin:8px">On '+(tday===TODAY?'today':dayTitle(tday).toLowerCase()==='tomorrow'?'tomorrow':WDL[dt(tday).getUTCDay()])+'</h3>'+td.map(row).join(''):''}${later.length?'<h3 style="margin:8px">Other open work</h3>'+later.map(row).join(''):''}`:'<p>No open tasks on the chart yet.</p>';
 }
 $('#pick').addEventListener('click',e=>{const b=e.target.closest('[data-pull]');if(!b)return;const t=item(b.dataset.pull),sid=b.dataset.ps,o=sid?item(t.id,sid):t;if(!o)return;
   addTodo(o.name,60,{color:t.color,src:'chart',from:o.id,course:sid?t.name:(t.course||'')});renderPick()});
@@ -625,14 +667,15 @@ const GRIP='<svg viewBox="0 0 10 16"><circle cx="2.5" cy="3" r="1.5"/><circle cx
 ICON.notes='<svg viewBox="0 0 16 16"><path d="M2 3h12v1.6H2zM2 7.2h12v1.6H2zM2 11.4h8v1.6H2z"/></svg>';
 function renderBar(){
   for(const id of [...sel])if(!todos.some(t=>t.id===id))sel.delete(id);
-  const n=todos.length,k=sel.size;
+  const n=dayList().length,k=sel.size;
   $('#lbar').innerHTML=!n?'':selecting?`<label><input type="checkbox" id="selAll" ${k===n?'checked':''}> Select all</label><span class="status">${k} selected</span><span style="margin-left:auto"></span><button class="del${k?' sure':''}" id="selDel" ${k?'':'disabled'}>Remove ${k||''} ${k===1?'task':'tasks'}</button><button id="selOff">Done</button>`
     :`<span class="lt">Priority order</span><span class="status">Drag ⋮⋮ to reorder</span><button id="selOn">Select</button>`;
   const all=$('#selAll');if(all)all.indeterminate=k>0&&k<n;
 }
 function renderTodo(){
-  const list=todos.slice().sort((a,b)=>a.done-b.done);
-  $('#todoCnt').textContent=todos.filter(t=>!t.done).length;
+  const list=dayList().sort((a,b)=>a.done-b.done);
+  $('#todoCnt').textContent=dayList(TODAY).filter(t=>!t.done).length;
+  renderWeek();
   let p=0;
   $('#todoList').innerHTML=list.length?list.map(t=>{const op=openNotes.has(t.id),first=(t.notes||'').trim().split('\n')[0];return `<li class="item${t.done?' done':''}${t.run?' run':''}${selecting&&sel.has(t.id)?' sel':''}" data-id="${t.id}" style="--c:${t.color}">
     <span class="grip" title="Drag to reorder" aria-label="Drag to reorder"><b>${t.done?'':++p}</b>${GRIP}</span>
@@ -642,15 +685,13 @@ function renderTodo(){
     <div class="tm"><span class="clock" data-clock></span><button class="ico${t.run?'':' go'}" data-act="play" aria-label="${t.run?'Pause':'Start'} timer">${t.run?ICON.pause:ICON.play}</button><button class="ico" data-act="reset" aria-label="Reset timer">${ICON.reset}</button><button class="ico more${t.notes?' has':''}" data-act="notes" aria-expanded="${op}" aria-label="Details" title="Details">${ICON.notes}</button></div>
     <button class="x" data-act="del" aria-label="Remove">×</button>
     ${op?`<div class="det"><textarea data-act="notetext" placeholder="Details, steps, links, what the professor asked for…" aria-label="Details for ${esc(t.name)}">${esc(t.notes||'')}</textarea></div>`:''}
-    <div class="prog"><i data-prog></i></div></li>`}).join(''):'<li class="empty">Nothing on tonight\'s list. Type a task above, or pull one in with "+ From chart".</li>';
+    <div class="prog"><i data-prog></i></div></li>`}).join(''):`<li class="empty">Nothing planned ${tday===TODAY?'for today':'for this day'} yet. Type a task above, or pull one in with "+ From chart".</li>`;
   renderBar();
-  $('#send').value=sessionEnd;
+  $('#send').value=plan(tday).end||sessionEnd;
+  $('#sstart').value=plan(tday).start||sessionStart;
+  $('#sstartL').hidden=tday===TODAY;$('#snote').hidden=tday!==TODAY;
+  $('.times').style.gridTemplateColumns=tday===TODAY?'minmax(0,1fr)':'';
   renderPick();live();
-}
-function endTime(){
-  const [h,m]=sessionEnd.split(':').map(Number),now=new Date(),e=new Date();e.setHours(h,m,0,0);
-  if(e<now&&now-e>3*36e5)e.setDate(e.getDate()+1);
-  return e;
 }
 function live(){
   const now=new Date();
@@ -662,19 +703,19 @@ function live(){
     li.classList.toggle('up',l<0);
     if(t.run&&l<=0&&!t.rang){t.rang=true;beep()}
   }
-  const open=todos.filter(t=>!t.done);
+  const day=dayList(),open=day.filter(t=>!t.done);
   const need=open.reduce((s,t)=>s+Math.max(0,leftSec(t)),0);
-  const total=todos.reduce((s,t)=>s+t.mins*60,0);
-  const end=endTime(),avail=Math.max(0,(end-now)/1000),spare=avail-need;
+  const total=day.reduce((s,t)=>s+t.mins*60,0);
+  const {start,end,isToday}=sessionTimes(),avail=Math.max(0,(end-start)/1000),spare=avail-need;
   const big=$('#sBig');
   big.className='big '+(spare>=0?'ok':'over');
-  big.innerHTML=!open.length?`${hm(avail)} free<small>Your list is clear until ${clockT(end)}</small>`:spare>=0?`${hm(spare)} left over<small>after everything on your list</small>`:`${hm(-spare)} over<small>more work than time before ${clockT(end)}</small>`;
+  big.innerHTML=!open.length?`${hm(avail)} free<small>${isToday?'Your list is clear until '+clockT(end):'Nothing planned yet for '+clockT(start)+'–'+clockT(end)}</small>`:spare>=0?`${hm(spare)} left over<small>after everything on your list</small>`:`${hm(-spare)} over<small>more work than time before ${clockT(end)}</small>`;
   const scale=Math.max(avail,need,1);
   $('#strip').innerHTML=open.map(t=>`<span style="width:${Math.max(0,leftSec(t))/scale*100}%;background:${t.color}" title="${esc(t.name)}"></span>`).join('')+(need>avail?`<div class="ovr" style="width:${(need-avail)/scale*100}%"></div>`:'')+`<div class="end" style="left:calc(${avail/scale*100}% - 3px)"></div>`;
-  $('#sNow').textContent='Now '+clockT(now);
+  $('#sNow').textContent=(isToday?'Now ':'Starts ')+clockT(start);
   $('#sEnd').textContent='Session ends '+clockT(end);
-  $('#sStats').innerHTML=`<dt>Total on the list</dt><dd>${hm(total)}</dd><dt>Still to do</dt><dd>${hm(need)}</dd><dt>Time until session ends</dt><dd>${hm(avail)}</dd><dt>You'd finish at</dt><dd>${clockT(new Date(now.getTime()+need*1000))}</dd>`;
-  $('#clrDone').disabled=!todos.some(t=>t.done);
+  $('#sStats').innerHTML=`<dt>Total on the list</dt><dd>${hm(total)}</dd><dt>Still to do</dt><dd>${hm(need)}</dd><dt>${isToday?'Time until session ends':'Session length'}</dt><dd>${hm(avail)}</dd><dt>You'd finish at</dt><dd>${clockT(new Date(start.getTime()+need*1000))}</dd>`;
+  $('#clrDone').disabled=!day.some(t=>t.done);
 }
 setInterval(()=>{if(!$('#todoView').hidden)live();else if(todos.some(t=>t.run))todos.forEach(t=>{if(t.run&&leftSec(t)<=0&&!t.rang){t.rang=true;beep()}})},1000);
 const L=$('#todoList');
@@ -702,9 +743,9 @@ $('#lbar').addEventListener('click',e=>{
   const id=e.target.id;
   if(id==='selOn'){selecting=true;sel.clear();renderTodo()}
   if(id==='selOff'){selecting=false;sel.clear();renderTodo()}
-  if(id==='selDel'&&sel.size){const s=new Set(sel);sel.clear();change(()=>{todos=todos.filter(t=>!s.has(t.id))},true);if(!todos.length){selecting=false;renderTodo()}}
+  if(id==='selDel'&&sel.size){const s=new Set(sel);sel.clear();change(()=>{todos=todos.filter(t=>!s.has(t.id))},true);if(!dayList().length){selecting=false;renderTodo()}}
 });
-$('#lbar').addEventListener('change',e=>{if(e.target.id==='selAll'){if(e.target.checked)todos.forEach(t=>sel.add(t.id));else sel.clear();renderTodo()}});
+$('#lbar').addEventListener('change',e=>{if(e.target.id==='selAll'){if(e.target.checked)dayList().forEach(t=>sel.add(t.id));else sel.clear();renderTodo()}});
 /* drag to reorder */
 L.addEventListener('pointerdown',e=>{
   const g=e.target.closest('.grip');if(!g||e.button)return;
@@ -724,8 +765,8 @@ L.addEventListener('pointermove',e=>{
 function endReorder(){
   if(!rd)return;rd.li.classList.remove('lift');rd=null;
   const order=[...L.querySelectorAll('.item')].map(li=>li.dataset.id);
-  if(order.join()===todos.slice().sort((a,b)=>a.done-b.done).map(t=>t.id).join())return renderTodo();
-  change(()=>{todos=order.map(id=>todos.find(t=>t.id===id)).filter(Boolean)},true);
+  if(order.join()===dayList().sort((a,b)=>a.done-b.done).map(t=>t.id).join())return renderTodo();
+  const k=dkey();change(()=>{todos=[...todos.filter(t=>t.day!==k),...order.map(id=>todos.find(t=>t.id===id)).filter(Boolean)]},true);
 }
 L.addEventListener('pointerup',endReorder);L.addEventListener('pointercancel',endReorder);
 L.addEventListener('change',e=>{
@@ -737,12 +778,13 @@ L.addEventListener('change',e=>{
   if(a==='mins'){const m=parseDur(e.target.value);if(m)change(()=>{t.mins=Math.max(1,m);t.rang=false},true);else e.target.value=hm(t.mins*60)}
 });
 L.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('input[type=text],.nm,[data-act=mins]'))e.target.blur()});
-$('#send').addEventListener('change',e=>{if(e.target.value){sessionEnd=e.target.value;save();live()}});
-$('#clrDone').onclick=()=>change(()=>{todos=todos.filter(t=>!t.done)},true);
+$('#send').addEventListener('change',e=>{if(e.target.value){const k=dkey();plans[k]={...plans[k],end:e.target.value};sessionEnd=e.target.value;save();renderWeek();live()}});
+$('#sstart').addEventListener('change',e=>{if(e.target.value){const k=dkey();plans[k]={...plans[k],start:e.target.value};sessionStart=e.target.value;save();live()}});
+$('#clrDone').onclick=()=>{const k=dkey();change(()=>{todos=todos.filter(t=>!(t.done&&t.day===k))},true)};
 
 /* ---------- move data ---------- */
 const dov=$('#dov');
-$('#dataBtn').onclick=()=>{$('#dtext').value=JSON.stringify({tasks,todos,sessionEnd});$('#derr').hidden=true;$('#dcopy').textContent='Copy';dov.classList.add('open')};
+$('#dataBtn').onclick=()=>{$('#dtext').value=JSON.stringify({tasks,todos,plans,sessionEnd,sessionStart});$('#derr').hidden=true;$('#dcopy').textContent='Copy';dov.classList.add('open')};
 $('#dx').onclick=()=>dov.classList.remove('open');
 dov.addEventListener('pointerdown',e=>{if(e.target===dov)dov.classList.remove('open')});
 $('#dcopy').onclick=()=>{const ta=$('#dtext'),b=$('#dcopy');ta.select();
@@ -751,7 +793,7 @@ $('#df').addEventListener('submit',e=>{
   e.preventDefault();const err=$('#derr');
   let d;try{d=JSON.parse($('#dtext').value)}catch(x){err.textContent="That text isn't planner data. Paste exactly what you copied.";err.hidden=false;return}
   if(!d||!Array.isArray(d.tasks)){err.textContent="That text doesn't have any chart tasks in it.";err.hidden=false;return}
-  change(()=>{tasks=[];todos=[];apply(d);fitRange()});dov.classList.remove('open');
+  change(()=>{tasks=[];todos=[];plans={};apply(d);fitRange()});dov.classList.remove('open');
 });
 
 /* ---------- tabs ---------- */
@@ -760,7 +802,7 @@ function route(){
   $('#chartView').hidden=todo;$('#todoView').hidden=!todo;$('#chartTools').hidden=todo;
   $('#tabChart').toggleAttribute('aria-current',!todo);$('#tabTodo').toggleAttribute('aria-current',todo);
   if(todo){$('#tabTodo').setAttribute('aria-current','page');renderTodo()}else $('#tabChart').setAttribute('aria-current','page');
-  $('#hint').textContent=todo?'Plan tonight: add tasks with how long they\'ll take, set when you want to stop, and start a timer as you work.':'Scroll sideways to move through time. Click a date to see that day on the right. Click or drag across empty space to add a task. Drag a bar to move it, or its ends to change how long it runs.';
+  $('#hint').textContent=todo?'Pick a day to plan it. Add tasks with how long they\'ll take, set your session times, and start a timer as you work.':'Scroll sideways to move through time. Click a date to see that day on the right. Click or drag across empty space to add a task. Drag a bar to move it, or its ends to change how long it runs.';
   $('#sample').hidden=todo||!isSample;
 }
 addEventListener('hashchange',route);
@@ -768,8 +810,10 @@ addEventListener('hashchange',route);
 /* ---------- load ---------- */
 function apply(d){
   if(Array.isArray(d.tasks))tasks=d.tasks;
-  if(Array.isArray(d.todos))todos=d.todos.map(t=>({el:0,run:null,...t}));
+  if(Array.isArray(d.todos))todos=d.todos.map(t=>({el:0,run:null,day:S(TODAY),...t}));
+  if(d.plans&&typeof d.plans==='object')plans=d.plans;
   if(typeof d.sessionEnd==='string')sessionEnd=d.sessionEnd;
+  if(typeof d.sessionStart==='string')sessionStart=d.sessionStart;
 }
 function useLocal(){
   let saved=null;try{saved=JSON.parse(localStorage.getItem('gantt-state'));if(!saved){const old=JSON.parse(localStorage.getItem('gantt-tasks'));if(Array.isArray(old))saved={tasks:old}}}catch(e){}
