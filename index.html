@@ -628,7 +628,7 @@ function addTodo(name,mins,extra){
 }
 function renderWeek(){
   /* today is the main view; other days sit in a quiet row of links */
-  const w0=tday>=TODAY&&tday<=TODAY+6?TODAY:tday-3;let h='<span class="lbl">Plan another day</span>';
+  const w0=tday>=TODAY&&tday<=TODAY+6?TODAY:tday-3;let h='';
   if(w0!==TODAY)h+=`<button class="pill" data-td="${TODAY}">Today${dayList(TODAY).some(t=>!t.done)?'<i></i>':''}</button><span class="lbl" style="margin:0 4px">…</span>`;
   for(let i=0;i<7;i++){const d=w0+i,has=dayList(d).some(t=>!t.done);
     h+=`<button class="pill${d===tday?' on':''}" data-td="${d}" aria-pressed="${d===tday}">${d===TODAY?'Today':WD[dt(d).getUTCDay()]+' '+dt(d).getUTCDate()}${has&&d!==tday?'<i aria-label="has a plan"></i>':''}</button>`}
